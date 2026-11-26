@@ -50,7 +50,7 @@ function stats(from,to){
  const inR=d=>(!from||d>=from)&&(!to||d<=to);
  let rev=0,cogs=0,shipCost=0,shipIn=0,loss=0,cnt=0,unk=0,exp=0;
  const u=v=>v===null||v===undefined||v==='';
- D.sales.filter(s=>inR(s.d)).forEach(s=>{rev+=n(s.price)*n(s.q);cogs+=n(s.cost)*n(s.q);shipCost+=n(s.shipCost);shipIn+=n(s.shipIn);cnt+=n(s.q);if(u(s.cost)||u(s.shipCost)||u(s.shipIn))unk++});
+ D.sales.filter(s=>inR(s.d)).forEach(s=>{rev+=n(s.price)*n(s.q);cogs+=n(s.cost)*n(s.q);shipCost+=n(s.shipCost);shipIn+=n(s.shipIn);cnt+=n(s.q);if(u(s.cost))unk++});
  D.losses.filter(l=>inR(l.d)).forEach(l=>{loss+=n(l.cost)*n(l.q);if(u(l.cost))unk++});
  D.expenses.filter(e=>inR(e.d)).forEach(e=>{exp+=n(e.amt)});
  return{rev,cogs,shipCost,shipIn,loss,cnt,unk,exp,profit:rev+shipIn-cogs-shipCost-loss-exp}
@@ -62,15 +62,14 @@ function go(t){tab=t;render();scrollTo(0,0)}
 function rng(){const t=today();if(range==='day')return[t,t];if(range==='month')return[t.slice(0,8)+'01',t];if(range==='year')return[t.slice(0,5)+'01-01',t];return[null,null]}
 function render(){if(ML[0]&&!ML[0].pid&&D.products.length)ML[0].pid=D.products[0].id;if(OL[0]&&!OL[0].pid&&D.products.length){OL[0].pid=D.products[0].id;OL[0].price=D.products[0].price}nav();$('#ttl').textContent={home:'ملخص الأرباح',sales:'المبيعات',stock:'المخزن',exp:'المصروفات العامة',more:'الشحن والنسخ الاحتياطي'}[tab];$('#app').innerHTML=V[tab]()}
 let ML=[{pid:null,q:'',c:''}],MS={ship:'',mode:'q'};
-let OL=[{pid:null,q:'1',price:''}],OS={sc:'',si:'',cust:'',d:''};
+let OL=[{pid:null,q:'1',price:''}],OS={cust:'',d:''};
 function olSel(i,id){OL[i].pid=id;OL[i].price=P(id).price;render()}
-function olShip(v){const x=D.ship[n(v)];if(x&&v!=='-1'){OS.sc=String(x.p);render()}}
 const V={
 home(){const[a,b]=rng();const s=stats(a,b);
  const low=D.products.filter(p=>stock(p.id)<=n(p.min||3));
  const val=D.products.reduce((t,p)=>t+stock(p.id)*n(p.cost),0),valU=D.products.some(p=>(p.cost===null||p.cost===undefined)&&stock(p.id)>0);
  return `<div class="tabs">${[['day','اليوم'],['month','الشهر'],['year','السنة'],['all','الكل']].map(r=>`<button class="${range===r[0]?'on':''}" onclick="range='${r[0]}';render()">${r[1]}</button>`).join('')}</div>
- <div class="card"><div class="mut">${s.unk?'ربح مبدئي (مش نهائي)':'صافي الربح'}</div><div class="big ${s.profit<0?'red':'grn'}">${fm(s.profit)} ج</div>${s.unk?`<div class="warn">⚠️ فيه ${s.unk} حركة ناقصة (تكلفة المنتج أو الشحن لسه مش معروفة). الرقم ده ممكن يكون أعلى من الحقيقي لحد ما تكمّلها.</div>`:''}</div>
+ <div class="card"><div class="mut">${s.unk?'ربح مبدئي (مش نهائي)':'صافي الربح'}</div><div class="big ${s.profit<0?'red':'grn'}">${fm(s.profit)} ج</div>${s.unk?`<div class="warn">⚠️ فيه ${s.unk} حركة ناقصة (تكلفة المنتج لسه مش معروفة). الرقم ده ممكن يكون أعلى من الحقيقي لحد ما تكمّلها.</div>`:''}</div>
  <div class="card"><div class="row"><span>المبيعات (${fm(s.cnt)} قطعة)</span><b>${fm(s.rev)}</b></div>
  <div class="row"><span>شحن محصّل من العملاء</span><b>${fm(s.shipIn)}</b></div>
  <div class="row"><span>تكلفة البضاعة المباعة</span><b>- ${fm(s.cogs)}</b></div>
@@ -82,18 +81,14 @@ home(){const[a,b]=rng();const s=stats(a,b);
 sales(){
  if(!D.products.length)return`<div class="card">ضيف منتجات الأول من تبويب المخزن.</div>`;
  const sorted=[...D.products].sort((a,b)=>a.name.localeCompare(b.name,'ar'));
- const sh=D.ship.map((s,i)=>`<option value="${i}">${esc(s.n)} - ${s.p}</option>`).join('');
  const lines=OL.map((l,i)=>`<div class="card" style="background:#000;margin-top:10px"><label>الصنف / الحجم</label><select onchange="olSel(${i},this.value)">${sorted.map(p=>`<option value="${p.id}" ${l.pid===p.id?'selected':''}>${esc(pname(p))} (${stock(p.id)})</option>`).join('')}</select>
  <div class="grid"><div><label>الكمية</label><input type="number" inputmode="numeric" value="${l.q}" oninput="OL[${i}].q=this.value"></div><div><label>سعر البيع للقطعة</label><input type="number" inputmode="decimal" value="${l.price}" oninput="OL[${i}].price=this.value"></div></div>${OL.length>1?`<button class="sm" style="margin-top:8px" onclick="OL.splice(${i},1);render()">شيل الصنف</button>`:''}</div>`).join('');
  const groups={};const order=[];
  [...D.sales].reverse().forEach(s=>{const k=s.oid||s.id;if(!groups[k]){groups[k]=[];order.push(k)}groups[k].push(s)});
  const list=order.slice(0,40).map(k=>{const g=groups[k].slice().reverse();const tot=g.reduce((t,s)=>t+n(s.price)*n(s.q),0);const si=g.reduce((t,s)=>t+n(s.shipIn),0);const sc=g.reduce((t,s)=>t+n(s.shipCost),0);
   return `<div class="row"><span>${esc(g[0].d)}${g[0].cust?' <span class=mut>'+esc(g[0].cust)+'</span>':''}${g.map(s=>'<br>'+esc(pname(P(s.pid)))+' × '+s.q+' <span class=mut>@ '+fm(s.price)+'</span>').join('')}${(si||sc)?'<br><span class=mut>شحن محصّل '+fm(si)+' | تكلفة شحن '+fm(sc)+'</span>':''}</span><span>${fm(tot)} <button class="sm" onclick="delOrder('${k}')">حذف</button></span></div>`}).join('')||'<div class="mut">مفيش مبيعات لسه</div>';
- return `<div class="card"><b>طلب جديد</b><div class="mut">الطلب ممكن يكون فيه أكتر من صنف، أو أحجام مختلفة من نفس الصنف. الشحن بيتسجل مرة واحدة للطلب كله.</div>${lines}
+ return `<div class="card"><b>طلب جديد</b><div class="mut">الطلب ممكن يكون فيه أكتر من صنف، أو أحجام مختلفة من نفس الصنف.</div>${lines}
  <button class="sec" onclick="OL.push({pid:D.products[0].id,q:'1',price:D.products[0].price});render()">+ صنف تاني في نفس الطلب</button>
- ${D.ship.length?`<label>أسعار الشحن المحفوظة</label><select onchange="olShip(this.value)"><option value="-1">-- اختار (اختياري) --</option>${sh}</select>`:''}
- <div class="grid"><div><label>تكلفة الشحن علينا (للطلب كله)</label><input type="number" inputmode="decimal" placeholder="مش معروف" value="${OS.sc}" oninput="OS.sc=this.value"></div><div><label>شحن محصّل من العميل (للطلب كله)</label><input type="number" inputmode="decimal" placeholder="مش معروف" value="${OS.si}" oninput="OS.si=this.value"></div></div>
- <div class="mut">سيبه فاضي لو مش عارفه (الربح هيتعلّم إنه مبدئي). اكتب 0 لو مفيش شحن فعلاً.</div>
  <label>اسم العميل (اختياري)</label><input value="${esc(OS.cust)}" oninput="OS.cust=this.value"><label>التاريخ</label><input type="date" value="${OS.d||today()}" oninput="OS.d=this.value">
  <button onclick="addOrder()">تسجيل الطلب</button></div><div class="card"><b>آخر الطلبات</b>${list}</div>`},
 stock(){
@@ -138,9 +133,9 @@ function fillR(){const p=P($('#rp').value);if(p)$('#rc').value=p.cost??''}
 function addOrder(){const rows=OL.filter(l=>l.pid&&n(l.q)>0);if(!rows.length)return alert('اكتب الكمية');
  const need={};rows.forEach(l=>need[l.pid]=(need[l.pid]||0)+n(l.q));
  for(const pid in need){if(need[pid]>stock(pid)&&!confirm('الكمية المطلوبة من '+pname(P(pid))+' ('+need[pid]+') أكبر من الرصيد ('+stock(pid)+'). تكمل؟'))return}
- const oid=uid(),d=OS.d||today(),sc=uv(OS.sc),si=uv(OS.si);
- rows.forEach((l,i)=>{const p=P(l.pid);D.sales.push({id:uid(),oid,d,pid:l.pid,q:n(l.q),price:n(l.price===''?p.price:l.price),cost:uv(p.cost),shipCost:i===0?sc:0,shipIn:i===0?si:0,cust:OS.cust})});
- OL=[{pid:D.products[0].id,q:'1',price:D.products[0].price}];OS={sc:'',si:'',cust:'',d:''};save();render()}
+ const oid=uid(),d=OS.d||today();
+ rows.forEach(l=>{const p=P(l.pid);D.sales.push({id:uid(),oid,d,pid:l.pid,q:n(l.q),price:n(l.price===''?p.price:l.price),cost:uv(p.cost),cust:OS.cust})});
+ OL=[{pid:D.products[0].id,q:'1',price:D.products[0].price}];OS={cust:'',d:''};save();render()}
 function delOrder(k){if(!confirm('حذف الطلب كله؟'))return;D.sales=D.sales.filter(s=>(s.oid||s.id)!==k);save();render()}
 function editSize(id){const p=P(id);const v=prompt('الحجم (مثلا 125 مل). سيبه فاضي للمسح',p.size||'');if(v===null)return;p.size=v.trim();save();render()}
 function addP(){const name=$('#pn').value.trim();if(!name)return alert('اكتب الاسم');const id=uid();
